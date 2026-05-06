@@ -1,9 +1,6 @@
 N-Gram Word Cloud - Phase 3 User Sentiment Version
 README
 
-File name:
-ngram_wordcloud_phase3_user_sentiment.html
-
 Overview
 
 This is a browser-based n-gram word cloud tool. It runs locally in a web browser and does not require Streamlit, Python, NLTK, an API key, or an internet connection after the HTML file is saved.
