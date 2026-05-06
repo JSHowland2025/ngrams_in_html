@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N-Gram Word Cloud - Phase 3.1</title>
+<style>
+:root{
+  --blue:#012169;--blue2:#1d4f91;--ink:#172033;--muted:#5f6b7a;--line:#d9dee8;
+  --page:#f5f7fb;--surface:#ffffff;--ok:#146c43;--bad:#a02626;--warn:#8a5a00;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font-family:Arial,Helvetica,sans-serif;line-height:1.45}
+header{background:linear-gradient(120deg,var(--blue),var(--blue2));color:#fff;padding:28px 24px}
+header div,main{max-width:1160px;margin:auto}
+h1{margin:0 0 6px;font-size:30px;letter-spacing:.02em}.sub{margin:0;color:rgba(255,255,255,.84);font-size:15px}
+main{padding:24px}.grid{display:grid;grid-template-columns:minmax(300px,390px) 1fr;gap:20px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 24px rgba(23,32,51,.06);padding:18px}
+.card+.card{margin-top:16px}
+h2{margin:0 0 14px;font-size:18px}
+h3{margin:18px 0 8px;font-size:13px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+label{display:block;margin:12px 0 6px;font-weight:700;font-size:13px}
+input,select,textarea,button{width:100%;font:inherit}
+input,select,textarea{border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px 11px;color:var(--ink)}
+textarea{min-height:90px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hint{color:var(--muted);font-size:12px;margin:6px 0 0}
+.status{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px}
+.status.show{display:block}.info{background:#eff6ff;color:#194b7d;border:1px solid #cfe3ff}
+.success{background:#effaf3;color:var(--ok);border:1px solid #ccebd7}
+.error{background:#fff1f1;color:var(--bad);border:1px solid #ffd2d2}
+.warning{background:#fff8e8;color:var(--warn);border:1px solid #ffe2a7}
+button{border:0;border-radius:10px;background:var(--blue);color:#fff;padding:11px 14px;cursor:pointer;font-weight:700;margin-top:14px}
+button.secondary{background:#e9edf5;color:var(--ink)}button:disabled{cursor:not-allowed;opacity:.55}
+.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}.actions button{margin-top:0}
+canvas{display:block;width:100%;max-width:900px;height:auto;border-radius:12px;border:1px solid var(--line);background:#fff}
+.summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.metric{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfcff}
+.value{display:block;font-size:22px;font-weight:700;color:var(--blue)}
+.metric span:last-child{color:var(--muted);font-size:12px}
+.table-wrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:12px;margin-top:14px}
+table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{position:sticky;top:0;background:#f1f4f9;z-index:1}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:28px;text-align:center;color:var(--muted);background:#fbfcff}
+.palette-preview{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.swatch{width:28px;height:22px;border-radius:6px;border:1px solid rgba(0,0,0,.15)}
+.sentiment-key{display:flex;gap:8px;align-items:center;margin-top:8px;color:var(--muted);font-size:12px}
+.sentiment-key span{display:inline-flex;align-items:center;gap:4px}.dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.12)}
+@media(max-width:880px){.grid,.summary,.actions{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>N-Gram Word Cloud</h1>
+    <p class="sub">Phase 3.1 browser version: simplified palettes, user-defined sentiment coloring, CSV exports, and high-resolution PNG export.</p>
+  </div>
+</header>
+
+<main>
+  <div class="grid">
+    <section>
+      <div class="card">
+        <h2>1. Upload CSV</h2>
+        <label for="csvFile">CSV file</label>
+        <input id="csvFile" type="file" accept=".csv,text/csv">
+        <p class="hint">The first row should contain column headers. Processing happens locally in your browser.</p>
+        <div id="fileStatus" class="status info"></div>
+      </div>
+
+      <div class="card">
+        <h2>2. Configure n-grams</h2>
+        <label for="textColumn">Text column</label>
+        <select id="textColumn" disabled><option>Upload a CSV first</option></select>
+
+        <div class="row">
+          <div>
+            <label for="ngramSize">N-gram size</label>
+            <select id="ngramSize">
+              <option value="1">1 word</option>
+              <option value="2" selected>2 words</option>
+              <option value="3">3 words</option>
+            </select>
+          </div>
+          <div>
+            <label for="minFrequency">Min frequency</label>
+            <input id="minFrequency" type="number" min="1" max="999" value="1">
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="maxNgrams">Max displayed n-grams</label>
+            <input id="maxNgrams" type="number" min="10" max="500" step="10" value="100">
+          </div>
+          <div>
+            <label for="fontScale">Word size</label>
+            <select id="fontScale">
+              <option value="small">Smaller</option>
+              <option value="standard" selected>Standard</option>
+              <option value="large">Larger</option>
+            </select>
+          </div>
+        </div>
+
+        <h3>Stopwords</h3>
+        <label for="customStopwords">Custom stopwords</label>
+        <textarea id="customStopwords" placeholder="Comma- or space-separated words"></textarea>
+        <p class="hint">Default English stopwords are included.</p>
+
+        <button id="generateBtn" disabled>Generate word cloud</button>
+        <div id="runStatus" class="status info"></div>
+      </div>
+
+      <div class="card">
+        <h2>3. Colors</h2>
+        <label for="colorMode">Colorization method</label>
+        <select id="colorMode">
+          <option value="palette" selected>Palette colors</option>
+          <option value="sentiment">Sentiment coloring</option>
+        </select>
+
+        <div id="paletteControls">
+          <label for="wordPalette">Word palette</label>
+          <select id="wordPalette">
+            <option value="viridis" selected>Viridis-like</option>
+            <option value="plasma">Plasma-like</option>
+            <option value="cividis">Cividis-like</option>
+            <option value="set2">Set2-like</option>
+            <option value="jeaBlues">JEA blues</option>
+            <option value="jeaNew">JEA new</option>
+          </select>
+          <div id="palettePreview" class="palette-preview" aria-label="Palette preview"></div>
+        </div>
+
+        <div id="sentimentControls" style="display:none">
+          <label for="sentimentSource">Sentiment source</label>
+          <select id="sentimentSource">
+            <option value="lexicon" selected>Estimate from text</option>
+            <option value="csvScore">Use numeric score column from CSV</option>
+          </select>
+
+          <div id="scoreColumnWrap" style="display:none">
+            <label for="sentimentScoreColumn">Sentiment score column</label>
+            <select id="sentimentScoreColumn" disabled>
+              <option value="">Upload a CSV first</option>
+            </select>
+            <p class="hint">If scores are already in a -1 to 1 range with negative values, they are used as-is. Other numeric ranges are automatically normalized to -1 to 1.</p>
+          </div>
+
+          <label for="sentimentPalette">Sentiment palette</label>
+          <select id="sentimentPalette">
+            <option value="redGreyGreen" selected>Red - Grey - Green</option>
+            <option value="orangeWhiteBlue">Orange - White - Blue</option>
+            <option value="purpleGreyTeal">Purple - Grey - Teal</option>
+          </select>
+
+          <label for="sentimentThreshold">Neutral threshold: <span id="sentimentThresholdValue">0.10</span></label>
+          <input id="sentimentThreshold" type="range" min="0" max="0.50" step="0.01" value="0.10">
+          <p class="hint">Scores between the negative and positive threshold stay grey. Lower values color words more aggressively; higher values keep more words neutral.</p>
+
+          <p class="hint">Text-estimated sentiment uses a lightweight embedded lexicon. It does not use an API and is not identical to Python VADER scoring.</p>
+          <div class="sentiment-key">
+            <span><i id="negDot" class="dot"></i> negative</span>
+            <span><i id="neuDot" class="dot"></i> neutral</span>
+            <span><i id="posDot" class="dot"></i> positive</span>
+          </div>
+        </div>
+
+        <label for="backgroundColor">Background color</label>
+        <select id="backgroundColor">
+          <option value="#ffffff" selected>white</option>
+          <option value="#f8f8ff">ghostwhite</option>
+          <option value="#f5fffa">mintcream</option>
+          <option value="#fffff0">ivory</option>
+          <option value="#fff0f5">lavenderblush</option>
+          <option value="#f0fff0">honeydew</option>
+          <option value="#f0f8ff">aliceblue</option>
+          <option value="#f5f5dc">beige</option>
+          <option value="#fffaf0">floralwhite</option>
+          <option value="#fff5ee">seashell</option>
+          <option value="#faf0e6">linen</option>
+          <option value="#f0ffff">azure</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <h2>4. Export</h2>
+        <label for="highResScale">High-resolution scale</label>
+        <select id="highResScale">
+          <option value="2">2x</option>
+          <option value="3">3x</option>
+          <option value="4" selected>4x</option>
+        </select>
+        <p class="hint">Standard PNG uses the displayed canvas. High-resolution PNG redraws the cloud at the selected scale.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <h2>Output</h2>
+        <div id="emptyState" class="empty">Upload a CSV file, choose a text column, then generate the n-gram word cloud.</div>
+
+        <div id="results" style="display:none">
+          <div class="summary">
+            <div class="metric"><span id="rowCount" class="value">0</span><span>Rows processed</span></div>
+            <div class="metric"><span id="tokenCount" class="value">0</span><span>Tokens used</span></div>
+            <div class="metric"><span id="uniqueCount" class="value">0</span><span>Unique n-grams</span></div>
+            <div class="metric"><span id="shownCount" class="value">0</span><span>Displayed</span></div>
+          </div>
+
+          <canvas id="wordCanvas" width="900" height="650" aria-label="N-gram word cloud"></canvas>
+
+          <div class="actions">
+            <button id="downloadPngBtn" class="secondary">Download PNG</button>
+            <button id="downloadHighResBtn" class="secondary">Download high-res PNG</button>
+            <button id="downloadCsvBtn" class="secondary">Displayed CSV</button>
+            <button id="downloadAllCsvBtn" class="secondary">All matching CSV</button>
+          </div>
+
+          <button id="copyTableBtn" class="secondary">Copy table</button>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr id="tableHeaderRow">
+                  <th style="width:60%">N-gram</th>
+                  <th>Frequency</th>
+                  <th id="sentimentHeader" style="display:none">Sentiment</th>
+                </tr>
+              </thead>
+              <tbody id="frequencyBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const defaultStopWords=new Set("a about above after again against all am an and any are as at be because been before being below between both but by can cannot could did do does doing down during each few for from further had has have having he her here hers herself him himself his how i if in into is it its itself just me more most my myself no nor not now of off on once only or other our ours ourselves out over own same she should so some such than that the their theirs them themselves then there these they this those through to too under until up very was we were what when where which while who whom why will with you your yours yourself yourselves s t don should ve ll re m d".split(/\s+/));
+
+const palettes={
+  viridis:["#440154","#414487","#2A788E","#22A884","#7AD151","#FDE725"],
+  plasma:["#0D0887","#6A00A8","#B12A90","#E16462","#FCA636","#F0F921"],
+  cividis:["#00204C","#31446B","#666870","#958F78","#C7BA7F","#FFE945"],
+  set2:["#66C2A5","#FC8D62","#8DA0CB","#E78AC3","#A6D854","#FFD92F"],
+  jeaBlues:["#012169","#1D4F91","#3ba5d4","#4EC3E0"],
+  jeaNew:["#004990","#898990","#00DEFF","#004FFF","#001C36"]
+};
+
+const sentimentPalettes={
+  redGreyGreen:["#FF0000","#808080","#00FF00"],
+  orangeWhiteBlue:["#FFA500","#FFFFFF","#1E90FF"],
+  purpleGreyTeal:["#800080","#A9A9A9","#008080"]
+};
+
+const lexicon={
+  excellent:3,amazing:3,awesome:3,outstanding:3,perfect:3,love:3,loved:3,great:2.5,best:2.5,wonderful:2.5,
+  good:2,helpful:2,quick:1.8,easy:1.8,friendly:1.8,professional:1.8,knowledgeable:1.8,clear:1.6,
+  satisfied:2,happy:2,pleased:2,appreciate:1.8,thanks:1.5,thank:1.5,fast:1.6,resolved:1.8,
+  reliable:1.7,efficient:1.7,courteous:1.8,polite:1.6,smooth:1.6,improved:1.4,works:1.2,
+  okay:.3,ok:.3,fine:.4,average:.1,neutral:0,
+  bad:-2,poor:-2,terrible:-3,awful:-3,horrible:-3,worst:-3,hate:-3,hated:-3,angry:-2.5,upset:-2.2,
+  disappointed:-2.2,frustrated:-2.4,confusing:-1.6,confused:-1.4,slow:-1.6,late:-1.4,delay:-1.4,delayed:-1.6,
+  problem:-1.6,problems:-1.6,issue:-1.3,issues:-1.3,broken:-2.2,failed:-2.3,failure:-2.3,error:-1.8,
+  rude:-2.5,unhelpful:-2.2,difficult:-1.6,hard:-1.2,expensive:-1.2,wrong:-1.8,complaint:-2,complaints:-2,
+  dissatisfied:-2.4,unhappy:-2.2,missing:-1.4,unresolved:-2.4,wait:-1.2,waiting:-1.4,hold:-1.1
+};
+const negators=new Set(["not","no","never","none","hardly","barely","rarely","without","isnt","wasnt","arent","werent","dont","doesnt","didnt","cant","cannot","wont"]);
+const intensifiers=new Set(["very","really","extremely","so","too","highly","completely","absolutely","totally"]);
+const dampeners=new Set(["somewhat","slightly","kind","kinda","sort","sorta","little","barely"]);
+
+const state={headers:[],rows:[],results:[],allResults:[],sentimentActive:false};
+
+const $=id=>document.getElementById(id);
+const els={
+  csvFile:$("csvFile"),fileStatus:$("fileStatus"),textColumn:$("textColumn"),ngramSize:$("ngramSize"),
+  minFrequency:$("minFrequency"),maxNgrams:$("maxNgrams"),fontScale:$("fontScale"),customStopwords:$("customStopwords"),
+  generateBtn:$("generateBtn"),runStatus:$("runStatus"),colorMode:$("colorMode"),paletteControls:$("paletteControls"),
+  sentimentControls:$("sentimentControls"),sentimentSource:$("sentimentSource"),scoreColumnWrap:$("scoreColumnWrap"),
+  sentimentScoreColumn:$("sentimentScoreColumn"),wordPalette:$("wordPalette"),sentimentPalette:$("sentimentPalette"),
+  sentimentThreshold:$("sentimentThreshold"),sentimentThresholdValue:$("sentimentThresholdValue"),
+  backgroundColor:$("backgroundColor"),palettePreview:$("palettePreview"),negDot:$("negDot"),neuDot:$("neuDot"),posDot:$("posDot"),
+  highResScale:$("highResScale"),emptyState:$("emptyState"),results:$("results"),rowCount:$("rowCount"),
+  tokenCount:$("tokenCount"),uniqueCount:$("uniqueCount"),shownCount:$("shownCount"),wordCanvas:$("wordCanvas"),
+  frequencyBody:$("frequencyBody"),sentimentHeader:$("sentimentHeader"),downloadPngBtn:$("downloadPngBtn"),
+  downloadHighResBtn:$("downloadHighResBtn"),downloadCsvBtn:$("downloadCsvBtn"),downloadAllCsvBtn:$("downloadAllCsvBtn"),
+  copyTableBtn:$("copyTableBtn")
+};
+
+function setStatus(el,msg,type="info"){el.textContent=msg;el.className=`status show ${type}`;}
+function clearStatus(el){el.textContent="";el.className="status";}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+function hexToRgb(hex){const h=hex.replace("#","");return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+function rgbToHex(rgb){return "#"+rgb.map(v=>Math.round(clamp(v,0,255)).toString(16).padStart(2,"0")).join("");}
+function mix(a,b,t){return a.map((v,i)=>v*(1-t)+b[i]*t);}
+function sentimentThreshold(){return clamp(Number(els.sentimentThreshold.value)||0,0,.5);}
+function updateThresholdLabel(){els.sentimentThresholdValue.textContent=sentimentThreshold().toFixed(2);}
+function colorFromSentiment(score,paletteName,threshold=0){
+  const [neg,neu,pos]=sentimentPalettes[paletteName].map(hexToRgb);
+  const s=clamp(score,-1,1);
+  const t=clamp(threshold,0,.95);
+  if(Math.abs(s)<=t)return rgbToHex(neu);
+  if(s<0){return rgbToHex(mix(neu,neg,(Math.abs(s)-t)/(1-t)));}
+  return rgbToHex(mix(neu,pos,(s-t)/(1-t)));
+}
+function updateSentimentKey(){
+  const p=sentimentPalettes[els.sentimentPalette.value];
+  els.negDot.style.background=p[0];els.neuDot.style.background=p[1];els.posDot.style.background=p[2];
+}
+function updateColorControls(){
+  const useSentiment=els.colorMode.value==="sentiment";
+  const useCsvScore=useSentiment&&els.sentimentSource.value==="csvScore";
+  els.paletteControls.style.display=useSentiment?"none":"block";
+  els.sentimentControls.style.display=useSentiment?"block":"none";
+  els.scoreColumnWrap.style.display=useCsvScore?"block":"none";
+  updateThresholdLabel();
+  updateSentimentKey();
+}
+function renderPalettePreview(){
+  els.palettePreview.innerHTML="";
+  const colors=palettes[els.wordPalette.value]||palettes.viridis;
+  colors.forEach(c=>{const s=document.createElement("span");s.className="swatch";s.style.background=c;s.title=c;els.palettePreview.appendChild(s);});
+}
+
+function parseCSV(text){
+  const rows=[];let row=[],field="",q=false;
+  if(text.charCodeAt(0)===0xfeff)text=text.slice(1);
+  for(let i=0;i<text.length;i++){
+    const c=text[i],n=text[i+1];
+    if(q){
+      if(c==='"'){if(n==='"'){field+='"';i++;}else q=false;}else field+=c;
+    }else{
+      if(c==='"'&&field.length===0)q=true;
+      else if(c===","){row.push(field);field="";}
+      else if(c==="\n"){row.push(field);rows.push(row);row=[];field="";}
+      else if(c==="\r"){if(n==="\n")continue;row.push(field);rows.push(row);row=[];field="";}
+      else field+=c;
+    }
+  }
+  row.push(field);rows.push(row);
+  return rows.filter(r=>r.some(c=>String(c).trim()!==""));
+}
+function rowsToObjects(rows){
+  if(!rows.length)throw Error("The CSV appears to be empty.");
+  const seen=new Map();
+  const headers=rows[0].map((h,i)=>String(h||"").trim()||`Column ${i+1}`).map(h=>{
+    const c=seen.get(h)||0;seen.set(h,c+1);return c?`${h}_${c+1}`:h;
+  });
+  return {headers,rows:rows.slice(1).map(vals=>Object.fromEntries(headers.map((h,i)=>[h,vals[i]??""])))};
+}
+function populateColumns(headers,rows){
+  els.textColumn.innerHTML="";
+  headers.forEach(h=>{const o=document.createElement("option");o.value=h;o.textContent=h;els.textColumn.appendChild(o);});
+  const sampleCount=Math.max(1,Math.min(rows.length,200));
+  const best=headers.map(h=>({h,avg:rows.slice(0,200).reduce((s,r)=>s+String(r[h]||"").length,0)/sampleCount})).sort((a,b)=>b.avg-a.avg)[0];
+  if(best)els.textColumn.value=best.h;
+  populateScoreColumns(headers,rows);
+  els.textColumn.disabled=false;els.generateBtn.disabled=false;
+}
+function parseNumber(value){
+  const cleaned=String(value??"").trim().replace(/,/g,"");
+  if(!cleaned)return NaN;
+  const n=Number(cleaned);
+  return Number.isFinite(n)?n:NaN;
+}
+function numericColumns(headers,rows){
+  return headers.filter(h=>rows.some(r=>Number.isFinite(parseNumber(r[h]))));
+}
+function populateScoreColumns(headers,rows){
+  els.sentimentScoreColumn.innerHTML="";
+  const numeric=numericColumns(headers,rows);
+  if(!numeric.length){
+    const o=document.createElement("option");o.value="";o.textContent="No numeric columns found";els.sentimentScoreColumn.appendChild(o);
+    els.sentimentScoreColumn.disabled=true;
+    return;
+  }
+  numeric.forEach(h=>{const o=document.createElement("option");o.value=h;o.textContent=h;els.sentimentScoreColumn.appendChild(o);});
+  els.sentimentScoreColumn.disabled=false;
+}
+
+function getStopWords(){
+  const s=new Set(defaultStopWords);
+  els.customStopwords.value.split(/[\s,]+/).map(w=>w.trim().toLowerCase()).filter(Boolean).forEach(w=>s.add(w));
+  return s;
+}
+function tokenize(text,sw){
+  return (String(text||"").toLowerCase().match(/[a-z0-9']+/g)||[])
+    .map(t=>t.replace(/^'+|'+$/g,"").replace(/[’]/g,"'"))
+    .filter(t=>t&&t.length>1&&!sw.has(t));
+}
+function rawTokens(text){
+  return (String(text||"").toLowerCase().match(/[a-z0-9']+/g)||[])
+    .map(t=>t.replace(/^'+|'+$/g,""));
+}
+function ngrams(tokens,n){
+  const out=[];
+  for(let i=0;i<=tokens.length-n;i++)out.push(tokens.slice(i,i+n).join(" "));
+  return out;
+}
+function sentimentScore(text){
+  const toks=rawTokens(text);
+  if(!toks.length)return 0;
+  let sum=0,hits=0;
+  for(let i=0;i<toks.length;i++){
+    const token=toks[i];
+    if(!(token in lexicon))continue;
+    let val=lexicon[token];
+    const prev=toks[i-1]||"",prev2=toks[i-2]||"";
+    if(negators.has(prev)||negators.has(prev2))val*=-0.85;
+    if(intensifiers.has(prev))val*=1.35;
+    if(dampeners.has(prev))val*=0.65;
+    sum+=val;hits++;
+  }
+  if(!hits)return 0;
+  return clamp(sum/(hits*3),-1,1);
+}
+function scoreColumnStats(column){
+  const vals=state.rows.map(r=>parseNumber(r[column])).filter(Number.isFinite);
+  if(!vals.length)throw Error("The selected sentiment score column does not contain usable numeric values.");
+  const min=Math.min(...vals),max=Math.max(...vals);
+  const mean=vals.reduce((s,v)=>s+v,0)/vals.length;
+  const useRaw=min<0&&min>=-1&&max<=1;
+  return {min,max,mean,useRaw};
+}
+function normalizedCsvScore(row,column,stats){
+  let v=parseNumber(row[column]);
+  if(!Number.isFinite(v))v=stats.mean;
+  if(stats.useRaw)return clamp(v,-1,1);
+  if(stats.max===stats.min)return 0;
+  return clamp(2*((v-stats.min)/(stats.max-stats.min))-1,-1,1);
+}
+
+function analyze(){
+  const col=els.textColumn.value;
+  const n=+els.ngramSize.value;
+  const min=Math.max(1,+els.minFrequency.value||1);
+  const max=Math.max(10,+els.maxNgrams.value||100);
+  const sw=getStopWords();
+  const useSentiment=els.colorMode.value==="sentiment";
+  const useCsvScore=useSentiment&&els.sentimentSource.value==="csvScore";
+  const scoreColumn=els.sentimentScoreColumn.value;
+  const csvStats=useCsvScore?scoreColumnStats(scoreColumn):null;
+  const counts=new Map();
+  const scoreSums=new Map();
+  const scoreCounts=new Map();
+  let tokenTotal=0;
+  if(!state.rows.length||!col)throw Error("Upload a CSV and select a text column first.");
+  if(useCsvScore&&!scoreColumn)throw Error("Select a numeric sentiment score column.");
+  for(const r of state.rows){
+    const text=String(r[col]||"");
+    const toks=tokenize(text,sw);
+    tokenTotal+=toks.length;
+    const grams=ngrams(toks,n);
+    const rowScore=useSentiment?(useCsvScore?normalizedCsvScore(r,scoreColumn,csvStats):sentimentScore(text)):0;
+    for(const g of grams){
+      counts.set(g,(counts.get(g)||0)+1);
+      if(useSentiment){
+        scoreSums.set(g,(scoreSums.get(g)||0)+rowScore);
+        scoreCounts.set(g,(scoreCounts.get(g)||0)+1);
+      }
+    }
+  }
+  const all=[...counts.entries()]
+    .filter(x=>x[1]>=min)
+    .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
+    .map(([text,frequency],idx)=>{
+      const item={rank:idx+1,text,frequency};
+      if(useSentiment)item.sentiment=(scoreSums.get(text)||0)/Math.max(1,scoreCounts.get(text)||1);
+      return item;
+    });
+  return {tokenTotal,uniqueTotal:counts.size,allResults:all,results:all.slice(0,max),sentimentActive:useSentiment,sentimentSource:useCsvScore?"csvScore":"lexicon"};
+}
+
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function renderTable(results,sentimentActive){
+  els.frequencyBody.innerHTML="";
+  els.sentimentHeader.style.display=sentimentActive?"table-cell":"none";
+  for(const r of results){
+    const tr=document.createElement("tr");
+    let html=`<td>${escapeHtml(r.text)}</td><td>${r.frequency.toLocaleString()}</td>`;
+    if(sentimentActive)html+=`<td>${r.sentiment.toFixed(3)}</td>`;
+    tr.innerHTML=html;
+    els.frequencyBody.appendChild(tr);
+  }
+}
+function seededRandom(seed){
+  let v=seed%2147483647;if(v<=0)v+=2147483646;
+  return ()=>((v=v*16807%2147483647)-1)/2147483646;
+}
+function overlap(a,b,p=2){return !(a.x+a.w+p<b.x||b.x+b.w+p<a.x||a.y+a.h+p<b.y||b.y+b.h+p<a.y);}
+function fontRange(){
+  const scale=els.fontScale.value;
+  if(scale==="small")return [12,62];
+  if(scale==="large")return [16,92];
+  return [14,76];
+}
+function wordColor(item,idx){
+  if(state.sentimentActive)return colorFromSentiment(item.sentiment||0,els.sentimentPalette.value,sentimentThreshold());
+  const p=palettes[els.wordPalette.value]||palettes.viridis;
+  return p[idx%p.length];
+}
+function drawCloud(canvas,results,scale=1){
+  const logicalW=900,logicalH=650;
+  canvas.width=logicalW*scale;canvas.height=logicalH*scale;
+  const ctx=canvas.getContext("2d");
+  ctx.setTransform(scale,0,0,scale,0,0);
+  ctx.clearRect(0,0,logicalW,logicalH);
+  ctx.fillStyle=els.backgroundColor.value;
+  ctx.fillRect(0,0,logicalW,logicalH);
+  if(!results.length){
+    ctx.fillStyle="#5f6b7a";ctx.font="24px Arial, Helvetica, sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText("No n-grams match the current settings",logicalW/2,logicalH/2);return;
+  }
+  const [minFont,maxFont]=fontRange();
+  const max=Math.max(...results.map(x=>x.frequency));
+  const min=Math.min(...results.map(x=>x.frequency));
+  const rand=seededRandom(results.reduce((s,x)=>s+x.text.length*x.frequency,97));
+  const placed=[];
+  for(const [idx,item] of results.entries()){
+    const ratio=max===min?1:(item.frequency-min)/(max-min);
+    let fs=Math.round(minFont+Math.sqrt(ratio)*(maxFont-minFont));
+    let ok=false;
+    while(fs>=10&&!ok){
+      ctx.font=`700 ${fs}px Arial, Helvetica, sans-serif`;
+      const ww=Math.ceil(ctx.measureText(item.text).width);
+      const wh=Math.ceil(fs*1.1);
+      const cx=logicalW/2+(rand()-.5)*80;
+      const cy=logicalH/2+(rand()-.5)*60;
+      for(let a=0;a<1800;a++){
+        const ang=a*.33,rad=2.4*ang;
+        const x=Math.round(cx+Math.cos(ang)*rad-ww/2);
+        const y=Math.round(cy+Math.sin(ang)*rad-wh/2);
+        const box={x,y,w:ww,h:wh};
+        if(x<8||y<8||x+ww>logicalW-8||y+wh>logicalH-8)continue;
+        if(placed.some(b=>overlap(box,b,4)))continue;
+        ctx.fillStyle=wordColor(item,idx);
+        ctx.textAlign="left";ctx.textBaseline="top";
+        ctx.fillText(item.text,x,y);
+        placed.push(box);ok=true;break;
+      }
+      if(!ok)fs-=3;
+    }
+  }
+}
+function showResults(){
+  clearStatus(els.runStatus);
+  const a=analyze();
+  state.results=a.results;state.allResults=a.allResults;state.sentimentActive=a.sentimentActive;
+  els.rowCount.textContent=state.rows.length.toLocaleString();
+  els.tokenCount.textContent=a.tokenTotal.toLocaleString();
+  els.uniqueCount.textContent=a.uniqueTotal.toLocaleString();
+  els.shownCount.textContent=a.results.length.toLocaleString();
+  renderTable(a.results,a.sentimentActive);
+  drawCloud(els.wordCanvas,a.results,1);
+  els.emptyState.style.display="none";els.results.style.display="block";
+  if(a.results.length){
+    const sentimentNote=a.sentimentActive?(a.sentimentSource==="csvScore"?` Sentiment: ${els.sentimentScoreColumn.value}.`:" Sentiment: text-estimated."):"";
+    setStatus(els.runStatus,`Generated ${a.results.length.toLocaleString()} displayed n-grams from ${a.allResults.length.toLocaleString()} matching n-grams.${sentimentNote}`,"success");
+  }else{
+    setStatus(els.runStatus,"No n-grams met the current min-frequency setting.","warning");
+  }
+}
+function csvOut(results){
+  const total=results.reduce((s,r)=>s+r.frequency,0)||1;
+  const header=state.sentimentActive?["Rank","N-gram","Frequency","SharePct","SentimentScore"]:["Rank","N-gram","Frequency","SharePct"];
+  const rows=[header];
+  results.forEach((r,i)=>{
+    const base=[r.rank||i+1,r.text,r.frequency,(r.frequency/total*100).toFixed(4)];
+    if(state.sentimentActive)base.push((r.sentiment||0).toFixed(6));
+    rows.push(base);
+  });
+  return rows.map(row=>row.map(v=>{
+    const text=String(v);
+    return /[",\n\r]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;
+  }).join(",")).join("\n");
+}
+function download(blob,name){
+  const u=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);
+}
+function maybeRedraw(){
+  updateColorControls();renderPalettePreview();
+  if(state.results.length)drawCloud(els.wordCanvas,state.results,1);
+}
+function maybeReanalyze(){
+  updateColorControls();renderPalettePreview();
+  if(state.rows.length&&els.results.style.display!=="none"){
+    try{showResults();}catch(err){setStatus(els.runStatus,err.message,"error");}
+  }
+}
+
+els.csvFile.addEventListener("change",e=>{
+  clearStatus(els.fileStatus);
+  const file=e.target.files&&e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const parsed=parseCSV(String(reader.result||""));
+      const obj=rowsToObjects(parsed);
+      state.headers=obj.headers;state.rows=obj.rows;state.results=[];state.allResults=[];state.sentimentActive=false;
+      populateColumns(obj.headers,obj.rows);
+      setStatus(els.fileStatus,`Loaded ${obj.rows.length.toLocaleString()} data rows and ${obj.headers.length.toLocaleString()} columns from ${file.name}.`,"success");
+      els.emptyState.style.display="block";els.results.style.display="none";
+    }catch(err){setStatus(els.fileStatus,err.message,"error");}
+  };
+  reader.onerror=()=>setStatus(els.fileStatus,"The file could not be read.","error");
+  reader.readAsText(file);
+});
+els.generateBtn.addEventListener("click",()=>{try{showResults();}catch(err){setStatus(els.runStatus,err.message,"error");}});
+els.downloadPngBtn.addEventListener("click",()=>els.wordCanvas.toBlob(b=>b&&download(b,"ngram_wordcloud.png"),"image/png"));
+els.downloadHighResBtn.addEventListener("click",()=>{
+  const scale=+els.highResScale.value||4;
+  const off=document.createElement("canvas");
+  drawCloud(off,state.results,scale);
+  off.toBlob(b=>b&&download(b,`ngram_wordcloud_${scale}x.png`),"image/png");
+});
+els.downloadCsvBtn.addEventListener("click",()=>download(new Blob([csvOut(state.results)],{type:"text/csv;charset=utf-8"}),"ngram_frequencies_displayed.csv"));
+els.downloadAllCsvBtn.addEventListener("click",()=>download(new Blob([csvOut(state.allResults)],{type:"text/csv;charset=utf-8"}),"ngram_frequencies_all_matching.csv"));
+els.copyTableBtn.addEventListener("click",async()=>{
+  const header=state.sentimentActive?"N-gram\tFrequency\tSentiment":"N-gram\tFrequency";
+  const rows=state.results.map(r=>state.sentimentActive?`${r.text}\t${r.frequency}\t${(r.sentiment||0).toFixed(3)}`:`${r.text}\t${r.frequency}`).join("\n");
+  try{await navigator.clipboard.writeText(header+"\n"+rows);setStatus(els.runStatus,"Frequency table copied to the clipboard.","success");}
+  catch{setStatus(els.runStatus,"Clipboard copy is not available in this browser context.","error");}
+});
+["wordPalette","sentimentPalette","backgroundColor","fontScale"].forEach(id=>els[id].addEventListener("change",maybeRedraw));
+["colorMode","sentimentSource","sentimentScoreColumn"].forEach(id=>els[id].addEventListener("change",maybeReanalyze));
+els.sentimentThreshold.addEventListener("input",maybeRedraw);
+updateColorControls();renderPalettePreview();
+</script>
+</body>
+</html>
