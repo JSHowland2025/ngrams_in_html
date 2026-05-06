@@ -1,4 +1,4 @@
-#N-Gram Word Cloud - Phase 3 User Sentiment Version
+N-Gram Word Cloud - Phase 3 User Sentiment Version
 README
 
 Overview
